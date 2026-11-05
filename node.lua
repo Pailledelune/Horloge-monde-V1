@@ -405,13 +405,14 @@ local function chevauche(a, b)
   return a[1] < b[3] and b[1] < a[3] and a[2] < b[4] and b[2] < a[4]
 end
 
--- Etiquette a droite du point, sinon a gauche, sinon decalee au-dessus ou
--- au-dessous : la premiere place libre dans la carte
+-- Etiquette a droite du point, sinon juste en dessous, au-dessus, a gauche,
+-- puis en biais : la premiere place libre dans la carte, sans toucher ni une
+-- autre etiquette ni le point d'une autre ville
 local function placer_etiquette(x, y, w, h, prises)
   local essais = {
-    {x + 16, y - h / 2}, {x - 16 - w, y - h / 2},
-    {x + 16, y - h / 2 - h - 6}, {x - 16 - w, y - h / 2 - h - 6},
-    {x + 16, y - h / 2 + h + 6}, {x - 16 - w, y - h / 2 + h + 6},
+    {x + 16, y - h / 2}, {x - w / 2, y + 14}, {x - w / 2, y - 14 - h},
+    {x - 16 - w, y - h / 2},
+    {x + 8, y + 12}, {x - 8 - w, y + 12}, {x + 8, y - 12 - h}, {x - 8 - w, y - 12 - h},
   }
   local premier
   for _, e in ipairs(essais) do
@@ -447,8 +448,13 @@ local function dessiner_carte(ts, t, slon, decl)
   for _, v in ipairs(villes) do
     if v.lat then liste[#liste + 1] = v end
   end
+  -- Les points de toutes les villes sont des obstacles pour les etiquettes
   local prises = {}
-  for i, v in ipairs(liste) do
+  for _, v in ipairs(liste) do
+    local x, y = projeter(v.lat, v.lon)
+    prises[#prises + 1] = {x - 13, y - 13, x + 13, y + 13}
+  end
+  for _, v in ipairs(liste) do
     local x, y = projeter(v.lat, v.lon)
     local ref = v == reference
     disque(x, y, ref and 11 or 9, CREUX)
