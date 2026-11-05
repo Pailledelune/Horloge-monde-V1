@@ -1,0 +1,81 @@
+{
+  "name": "Horloge du monde",
+  "permissions": {
+    "network": "Récupère la position, le fuseau horaire et la météo des villes sur open-meteo.com"
+  },
+  "options": [
+    {
+      "title": "Agence",
+      "type": "section"
+    },
+    {
+      "title": "Logo (facultatif)",
+      "name": "logo",
+      "type": "resource",
+      "valid": ["image"],
+      "default": "empty.png",
+      "ui_width": 6,
+      "hint": "PNG avec transparence, de préférence large : 460 x 110 environ"
+    },
+    {
+      "title": "Nom de l'agence",
+      "name": "agence",
+      "type": "string",
+      "default": "",
+      "placeholder": "Agence de voyages",
+      "ui_width": 6,
+      "hint": "Affiché à la place du logo quand aucun logo n'est choisi"
+    },
+    {
+      "title": "Ville de référence",
+      "type": "section",
+      "intro": "Ville de l'agence : son heure s'affiche en grand, et les décalages horaires sont calculés par rapport à elle. Sans ville saisie, le panneau affiche Sarrebourg."
+    },
+    {
+      "title": "Ville",
+      "name": "ref_ville",
+      "type": "string",
+      "default": "",
+      "placeholder": "Sarrebourg",
+      "ui_width": 6
+    },
+    {
+      "title": "Code du pays",
+      "name": "ref_pays",
+      "type": "string",
+      "default": "FR",
+      "ui_width": 6,
+      "hint": "Deux lettres : FR, DE, BE, CH, LU. Laisser vide pour chercher dans tous les pays"
+    },
+    {
+      "title": "Villes du monde",
+      "type": "section",
+      "intro": "Jusqu'à 7 villes, de préférence rangées d'ouest en est. Sans ville saisie : Los Angeles, New York, Rio de Janeiro, Dubaï, Bangkok, Tokyo et Sydney. La météo se met à jour toutes les 15 minutes."
+    },
+    {
+      "title": "Villes",
+      "name": "villes",
+      "type": "list",
+      "itemname": "Ville",
+      "items": [
+        {
+          "title": "Ville",
+          "name": "ville",
+          "type": "string",
+          "default": "",
+          "placeholder": "New York",
+          "ui_width": 6
+        },
+        {
+          "title": "Code du pays",
+          "name": "pays",
+          "type": "string",
+          "default": "",
+          "placeholder": "US",
+          "ui_width": 6,
+          "hint": "Deux lettres : US, JP, AU, BR, AE. Conseillé pour éviter les villes homonymes"
+        }
+      ]
+    }
+  ]
+}

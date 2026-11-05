@@ -1,0 +1,10 @@
+{
+  "name": "Horloge du monde",
+  "author": "Pailledelune",
+  "desc": "Carte du monde avec zones de jour et de nuit en temps réel, heure locale et heure, température et météo de 7 villes",
+  "platforms": ["pi/epoch-1", "pi/epoch-2"],
+  "offline": {
+    "support": "yes",
+    "info": "L'heure et la carte jour/nuit fonctionnent sans Internet ; la météo nécessite une connexion"
+  }
+}

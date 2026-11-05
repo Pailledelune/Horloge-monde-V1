@@ -1,0 +1,170 @@
+#!/usr/bin/python2.7
+# -*- coding: utf-8 -*-
+#
+# Service de l'horloge du monde : retrouve la position et le fuseau des
+# villes choisies, interroge Open-Meteo toutes les 15 minutes et ecrit
+# monde.json, lu par node.lua. Compatible Python 2.7 (info-beamer) et 3.
+
+import json
+import os
+import time
+import traceback
+
+import requests
+
+URL_METEO = "https://api.open-meteo.com/v1/forecast"
+URL_VILLE = "https://geocoding-api.open-meteo.com/v1/search"
+PERIODE = 15 * 60          # secondes entre deux mises a jour
+PERIODE_ERREUR = 2 * 60    # nouvel essai apres une erreur
+PAUSE = 20                 # frequence de lecture des reglages
+MAX_VILLES = 7
+
+REFERENCE = (u"Sarrebourg", u"FR")
+VILLES = [
+    (u"Los Angeles", u"US"),
+    (u"New York", u"US"),
+    (u"Rio de Janeiro", u"BR"),
+    (u"Dubaï", u"AE"),
+    (u"Bangkok", u"TH"),
+    (u"Tokyo", u"JP"),
+    (u"Sydney", u"AU"),
+]
+
+
+def lire_config():
+    try:
+        with open("config.json") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def choix_villes(config):
+    """(reference, [villes du monde]) saisies, ou celles par defaut"""
+    nom = (config.get("ref_ville") or u"").strip()
+    reference = (nom, (config.get("ref_pays") or u"").strip()) if nom else REFERENCE
+    villes = []
+    for v in config.get("villes") or []:
+        nom = (v.get("ville") or u"").strip()
+        if nom:
+            villes.append((nom, (v.get("pays") or u"").strip()))
+    return reference, (villes or VILLES)[:MAX_VILLES]
+
+
+def chercher_ville(nom, pays):
+    params = {"name": nom, "count": 1, "language": "fr", "format": "json"}
+    if pays:
+        params["countryCode"] = pays.upper()
+    r = requests.get(URL_VILLE, timeout=20, params=params)
+    r.raise_for_status()
+    resultats = r.json().get("results") or []
+    if not resultats:
+        return None
+    return resultats[0]
+
+
+def condition(code, jour):
+    """Code meteo WMO -> (animation de node.lua, libelle)"""
+    if code == 0:
+        return ("soleil" if jour else "lune"), u"Ciel dégagé"
+    if code == 1:
+        return ("eclaircies" if jour else "eclaircies_nuit"), u"Peu nuageux"
+    if code == 2:
+        return ("eclaircies" if jour else "eclaircies_nuit"), u"Partiellement nuageux"
+    if code == 3:
+        return "nuageux", u"Couvert"
+    if code in (45, 48):
+        return "brouillard", u"Brouillard"
+    if code in (56, 57, 66, 67):
+        return "verglas", u"Pluie verglaçante"
+    if 51 <= code <= 55:
+        return "pluie", u"Bruine"
+    if 61 <= code <= 65:
+        return "pluie", u"Pluie"
+    if 80 <= code <= 82:
+        return "pluie", u"Averses"
+    if 71 <= code <= 77 or code in (85, 86):
+        return "neige", u"Neige"
+    if code in (95, 96, 99):
+        return "orage", u"Orage"
+    return "nuageux", u"Couvert"
+
+
+def interroger(ville):
+    r = requests.get(URL_METEO, timeout=20, params={
+        "latitude": ville["latitude"],
+        "longitude": ville["longitude"],
+        "current": "temperature_2m,weather_code,is_day",
+        "timezone": "auto",
+    })
+    r.raise_for_status()
+    donnees = r.json()
+    actuel = donnees["current"]
+    anim, libelle = condition(actuel["weather_code"], actuel.get("is_day", 1) == 1)
+    return {
+        "nom": ville["name"],
+        "pays": ville.get("country"),
+        "lat": ville["latitude"],
+        "lon": ville["longitude"],
+        "decalage": donnees.get("utc_offset_seconds") or 0,
+        "temperature": actuel["temperature_2m"],
+        "anim": anim,
+        "libelle": libelle,
+        "maj": int(time.time()),
+    }
+
+
+def sans_vides(valeur):
+    """Retire les champs sans valeur : en Lua, un null JSON n'est pas nil"""
+    if isinstance(valeur, dict):
+        return dict((k, sans_vides(v)) for k, v in valeur.items() if v is not None)
+    if isinstance(valeur, list):
+        return [sans_vides(v) for v in valeur]
+    return valeur
+
+
+def ecrire(reference, villes):
+    # Ecriture dans un fichier temporaire puis renommage : node.lua ne lit
+    # jamais un fichier a moitie ecrit
+    with open("monde.json.tmp", "w") as f:
+        json.dump(sans_vides({"reference": reference, "villes": villes}), f)
+    os.rename("monde.json.tmp", "monde.json")
+
+
+def mettre_a_jour(choix, positions, resultats):
+    """Interroge chaque ville ; garde l'ancien resultat si l'une echoue.
+    Renvoie True si tout a reussi."""
+    reussi = True
+    for c in choix:
+        try:
+            if c not in positions:
+                positions[c] = chercher_ville(c[0], c[1])
+            if positions[c] is None:
+                resultats[c] = {"nom": c[0], "erreur": u"Ville introuvable"}
+            else:
+                resultats[c] = interroger(positions[c])
+                print("monde: %s" % resultats[c]["nom"].encode("ascii", "replace"))
+        except Exception:
+            traceback.print_exc()
+            reussi = False
+    return reussi
+
+
+def main():
+    choix_vu = None
+    positions = {}
+    resultats = {}
+    prochaine = 0
+    while True:
+        reference, villes = choix_villes(lire_config())
+        choix = [reference] + villes
+        if choix != choix_vu or time.time() >= prochaine:
+            reussi = mettre_a_jour(choix, positions, resultats)
+            ecrire(resultats.get(reference), [resultats[c] for c in villes if c in resultats])
+            choix_vu = choix
+            prochaine = time.time() + (PERIODE if reussi else PERIODE_ERREUR)
+        time.sleep(PAUSE)
+
+
+if __name__ == "__main__":
+    main()
